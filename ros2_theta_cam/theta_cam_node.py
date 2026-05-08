@@ -16,7 +16,7 @@ import gphoto2cffi as gp
 
 
 DEVICE_IDVENDER_STR =   "idVendor           0x05ca Ricoh Co., Ltd"
-DEVICE_IDPRODUCT_STR =  "idProduct          0x2712"
+DEVICE_IDPRODUCT_STR =  "idProduct          0x2717"
 DEVICE_IDPRODUCT_STR2 = "idProduct          0x0368"
 
 
@@ -233,10 +233,16 @@ class ThetaNode(Node):
                     print("serial number: " + serial)
                 time.sleep(2)
         
-        if serial == "":
-            config_str = "thetauvcsrc mode=" + mode + " ! decodebin ! autovideoconvert ! video/x-raw,format=BGRx ! queue ! videoconvert ! video/x-raw,format=BGR ! queue ! appsink"
-        else:
-            config_str = "thetauvcsrc mode=" + mode + " serial=" + serial + " ! decodebin ! autovideoconvert ! video/x-raw,format=BGRx ! queue ! videoconvert ! video/x-raw,format=BGR ! queue ! appsink"
+        # if serial == "":
+        #     config_str = "thetauvcsrc mode=" + mode + " ! decodebin ! autovideoconvert ! video/x-raw,format=BGRx ! queue ! videoconvert ! video/x-raw,format=BGR ! queue ! appsink"
+        # else:
+        #     config_str = "thetauvcsrc mode=" + mode + " serial=" + serial + " ! decodebin ! autovideoconvert ! video/x-raw,format=BGRx ! queue ! videoconvert ! video/x-raw,format=BGR ! queue ! appsink"
+        
+        # config_str = "thetauvcsrc mode=4K ! h264parse ! avdec_h264 ! videoconvert n-threads=0 ! video/x-raw,format=BGR ! appsink drop=true sync=false emit-signals=true max-buffers=1"
+        
+        # Nvidia Hardware Accelerated pipeline  
+        config_str = "thetauvcsrc mode=2K ! queue max-size-buffers=1 leaky=downstream ! h264parse ! nvv4l2decoder low-latency=1 ! nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! video/x-raw,format=BGR ! appsink sync=false drop=true"    
+
         self.frame_grabber = FrameGrabber(config_str)
 
         # Node.create_publisher(msg_type, topic)に引数を渡してpublisherを作成
@@ -271,9 +277,19 @@ class ThetaNode(Node):
             if self.counter >= self.frame_skip:
                 self.counter = 0
                 # スライシングによる高速リサイズ（cv2.resizeより軽量）
+                # image = frame[::2, ::2]
+                # image_msg = self.bridge.cv2_to_imgmsg(image, encoding="bgr8")
+                # self.publisher.publish(image_msg)
+
+                # Add timestamp to the header and publish
                 image = frame[::2, ::2]
                 image_msg = self.bridge.cv2_to_imgmsg(image, encoding="bgr8")
+                
+                # Assign the frame_id and timestamp
+                image_msg.header.frame_id = "360_camera_link" 
+                image_msg.header.stamp = self.get_clock().now().to_msg()
                 self.publisher.publish(image_msg)
+                
         else:
             # フレーム取得失敗 - カウンタを増やす
             self.read_failures += 1
@@ -315,4 +331,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-
